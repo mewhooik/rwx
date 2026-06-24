@@ -1,0 +1,6 @@
+{
+  "name": "Rojgar With Ankit",
+  "description": "A mobile-friendly batch explorer app allowing students to search, filter, and view detailed exam batches and preparation courses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

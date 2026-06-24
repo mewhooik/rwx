@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  touch-action: pan-y; /* Only allow vertical touch scroll, blocks side swiping movement and scaling */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Custom premium elegant animated effects for the WhatsApp Modal */
+@keyframes premium-gola-breath {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+  50% {
+    transform: scale(1.025);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.82), 0 0 10px rgba(255, 255, 255, 0.03), 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+}
+
+.gola-pulse-animate {
+  animation: premium-gola-breath 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
