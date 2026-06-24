@@ -384,7 +384,7 @@ export default function TestPlayer({
     : (testTitle || "General Practice");
 
   return (
-    <div id="test_player_root" className="h-screen overflow-y-auto bg-slate-100 flex flex-col font-sans antialiased">
+    <div id="test_player_root" className="h-[100dvh] overflow-y-auto bg-slate-100 flex flex-col font-sans antialiased">
       
       {/* ----------------- EXAM TAKING PHASE ----------------- */}
       {testPhase === "taking" && (
@@ -426,7 +426,7 @@ export default function TestPlayer({
           </header>
 
           {/* Core App Stage */}
-          <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
+          <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 pb-28 sm:pb-4 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
             
             {/* Left Box: Question Display & Answer Options */}
             <section className="lg:col-span-8 flex flex-col justify-between bg-white border border-slate-200 rounded-3xl p-4 sm:p-6 shadow-sm min-h-[400px] select-none">
@@ -790,7 +790,7 @@ export default function TestPlayer({
           </nav>
 
           {/* Content Pane */}
-          <div className="max-w-4xl mx-auto w-full p-4 sm:p-6 flex-1 flex flex-col gap-6">
+          <div className="max-w-4xl mx-auto w-full p-4 sm:p-6 pb-28 sm:pb-6 flex-1 flex flex-col gap-6">
             
             {resultsTab === "overview" && (
               <>
