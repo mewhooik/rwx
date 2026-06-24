@@ -17,16 +17,71 @@ function sendEncrypted(res: any, data: any, status = 200) {
   res.status(status).json(encryptResponse(data));
 }
 
+/**
+ * Robust fetch utility with header forwarding, retry mechanics, 
+ * and custom User-Agent mapping to bypass bot-detection 403 blocks.
+ */
+async function proxyFetch(targetUrl: string, req: express.Request, retries = 2, delay = 1000): Promise<Response> {
+  const headers: Record<string, string> = {
+    "Accept": "application/json, text/plain, */*",
+    "User-Agent": (req.headers["user-agent"] as string) || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept-Language": (req.headers["accept-language"] as string) || "en-US,en;q=0.9,hi;q=0.8",
+    "Referer": "https://rwapi.vercel.app/",
+    "Origin": "https://rwapi.vercel.app"
+  };
+
+  // Forward client hints if present to mimic a genuine user interaction
+  const clientHints = [
+    "sec-ch-ua",
+    "sec-ch-ua-mobile",
+    "sec-ch-ua-platform",
+    "sec-ch-ua-platform-version",
+    "sec-ch-ua-arch",
+    "sec-ch-ua-bitness",
+    "sec-ch-ua-model"
+  ];
+  
+  for (const hint of clientHints) {
+    if (req.headers[hint]) {
+      headers[hint] = req.headers[hint] as string;
+    }
+  }
+
+  let lastError: any = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      console.log(`[Proxy Fetch Attempt ${attempt + 1}] URL: ${targetUrl}`);
+      const res = await fetch(targetUrl, { headers });
+      
+      // If we got a successful status or a standard non-retryable user error (e.g., 400, 404), return immediately.
+      // If it is 403 or 5xx, we should attempt retry.
+      if (res.ok || (res.status !== 403 && res.status < 500)) {
+        return res;
+      }
+      
+      console.warn(`[Proxy Fetch Warning] Received status ${res.status} from upstream on attempt ${attempt + 1}.`);
+      if (attempt < retries) {
+        console.log(`Waiting ${delay}ms before retrying...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    } catch (err: any) {
+      console.error(`[Proxy Fetch Error] Error on attempt ${attempt + 1}: ${err.message || err}`);
+      lastError = err;
+      if (attempt < retries) {
+        console.log(`Waiting ${delay}ms before retrying...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError || new Error("Failed to fetch upstream after multiple attempts");
+}
+
 // Proxy API requests to bypass CORS
 app.get("/api/batches", async (req, res) => {
   try {
     console.log("Proxy request received for /api/batches. Fetching upstream...");
-    const apiRes = await fetch("https://rwapi.vercel.app/api/batches", {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const apiRes = await proxyFetch("https://rwapi.vercel.app/api/batches", req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream API status: ${apiRes.status}`);
@@ -53,12 +108,8 @@ app.get("/api/subjects", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing bid parameter" });
     }
     console.log(`Proxy request received for /api/subjects with bid: ${bid}. Fetching upstream...`);
-    const apiRes = await fetch(`https://rwapi.vercel.app/api/subjects?bid=${bid}`, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const targetUrl = `https://rwapi.vercel.app/api/subjects?bid=${encodeURIComponent(String(bid))}`;
+    const apiRes = await proxyFetch(targetUrl, req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream API status: ${apiRes.status}`);
@@ -84,12 +135,8 @@ app.get("/api/topics", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing bid or sid parameter" });
     }
     console.log(`Proxy request received for /api/topics with bid: ${bid}, sid: ${sid}. Fetching upstream...`);
-    const apiRes = await fetch(`https://rwapi.vercel.app/api/topics?bid=${bid}&sid=${sid}`, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const targetUrl = `https://rwapi.vercel.app/api/topics?bid=${encodeURIComponent(String(bid))}&sid=${encodeURIComponent(String(sid))}`;
+    const apiRes = await proxyFetch(targetUrl, req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream API status: ${apiRes.status}`);
@@ -115,12 +162,8 @@ app.get("/api/content", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing bid, sid or tid parameter" });
     }
     console.log(`Proxy request received for /api/content with bid: ${bid}, sid: ${sid}, tid: ${tid}. Fetching upstream...`);
-    const apiRes = await fetch(`https://rwapi.vercel.app/api/content?bid=${bid}&sid=${sid}&tid=${tid}`, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const targetUrl = `https://rwapi.vercel.app/api/content?bid=${encodeURIComponent(String(bid))}&sid=${encodeURIComponent(String(sid))}&tid=${encodeURIComponent(String(tid))}`;
+    const apiRes = await proxyFetch(targetUrl, req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream API status: ${apiRes.status}`);
@@ -146,12 +189,8 @@ app.get("/api/pdf", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing parameter 'l'" });
     }
     console.log(`Proxy request received for /api/pdf with l query parameter. Fetching upstream...`);
-    const apiRes = await fetch(`https://rwapi.vercel.app/api/pdf?l=${encodeURIComponent(String(l))}`, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const targetUrl = `https://rwapi.vercel.app/api/pdf?l=${encodeURIComponent(String(l))}`;
+    const apiRes = await proxyFetch(targetUrl, req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream API status: ${apiRes.status}`);
@@ -177,12 +216,8 @@ app.get("/api/liveupcoming", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing parameter 'bid'" });
     }
     console.log(`Proxy liveupcoming request for bid: ${bid}`);
-    const apiRes = await fetch(`https://rwapi.vercel.app/api/liveupcoming?bid=${bid}`, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const targetUrl = `https://rwapi.vercel.app/api/liveupcoming?bid=${encodeURIComponent(String(bid))}`;
+    const apiRes = await proxyFetch(targetUrl, req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream API status: ${apiRes.status}`);
@@ -209,15 +244,10 @@ app.get("/api/video", async (req, res) => {
     }
     
     // Always call upstream API without the 'q' parameter to prevent 404.
-    const targetUrl = `https://rwapi.vercel.app/api/video?vid=${vid}&bid=${bid}`;
+    const targetUrl = `https://rwapi.vercel.app/api/video?vid=${encodeURIComponent(String(vid))}&bid=${encodeURIComponent(String(bid))}`;
     
     console.log(`Proxy video request for vid: ${vid}, bid: ${bid}, targetUrl: ${targetUrl}`);
-    const apiRes = await fetch(targetUrl, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const apiRes = await proxyFetch(targetUrl, req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream API status: ${apiRes.status}`);
@@ -276,12 +306,8 @@ app.get("/api/testseries", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing bid parameter" });
     }
     console.log(`Proxy request received for /api/testseries with bid: ${bid}. Fetching upstream...`);
-    const apiRes = await fetch(`https://rwapi.vercel.app/api/testseries?bid=${bid}`, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const targetUrl = `https://rwapi.vercel.app/api/testseries?bid=${encodeURIComponent(String(bid))}`;
+    const apiRes = await proxyFetch(targetUrl, req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream API status: ${apiRes.status}`);
@@ -307,12 +333,8 @@ app.get("/api/testsubject", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing tsid parameter" });
     }
     console.log(`Proxy request received for /api/testsubject with tsid: ${tsid}. Fetching upstream...`);
-    const apiRes = await fetch(`https://rwapi.vercel.app/api/testsubject?tsid=${tsid}`, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const targetUrl = `https://rwapi.vercel.app/api/testsubject?tsid=${encodeURIComponent(String(tsid))}`;
+    const apiRes = await proxyFetch(targetUrl, req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream API status: ${apiRes.status}`);
@@ -338,12 +360,8 @@ app.get("/api/testtitles", async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing tsid or sid parameter" });
     }
     console.log(`Proxy request received for /api/testtitles with tsid: ${tsid}, sid: ${sid}. Fetching upstream...`);
-    const apiRes = await fetch(`https://rwapi.vercel.app/api/testtitles?tsid=${tsid}&sid=${sid}`, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const targetUrl = `https://rwapi.vercel.app/api/testtitles?tsid=${encodeURIComponent(String(tsid))}&sid=${encodeURIComponent(String(sid))}`;
+    const apiRes = await proxyFetch(targetUrl, req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream API status: ${apiRes.status}`);
@@ -374,16 +392,11 @@ app.get("/api/questions", async (req, res) => {
       if (!test_id) {
         return res.status(400).json({ success: false, message: "Missing test_id or url parameter" });
       }
-      questionsUrl = `https://testseries-assets-v3.classx.co.in/test_title_question/rozgar_db/${test_id}/${test_id}_questions0.0609933946874508.json`;
+      questionsUrl = `https://testseries-assets-v3.classx.co.in/test_title_question/rozgar_db/${encodeURIComponent(String(test_id))}/${encodeURIComponent(String(test_id))}_questions0.0609933946874508.json`;
       console.log(`Proxy request for questions test_id: ${test_id}. Fetching from ClassX CDN fallback: ${questionsUrl}`);
     }
     
-    const apiRes = await fetch(questionsUrl, {
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
+    const apiRes = await proxyFetch(questionsUrl, req);
     
     if (!apiRes.ok) {
       throw new Error(`Upstream questions status: ${apiRes.status}`);
